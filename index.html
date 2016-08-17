@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <title>RSIM</title>
+
+    <style>
+    body {
+        background: #ad0000;
+        color: #fff;
+    }
+    button {
+        background: rgba(200, 200, 200, .3);
+        color: #fff;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        font-size: 20px;
+        font-weight: bold;
+        padding: 5px 20px;
+        position: relative;
+        min-width: 150px;
+    }
+    button:active {
+        top: 2px;
+    }
+    .container {
+        margin: 0 auto;
+        width: 80%;
+        max-width: 1000px;
+        position: relative;
+    }
+    .status-container {
+        background: rgba(200, 200, 200, .2);
+        padding: 5px;
+        text-align: center;
+        margin: 10px 0;
+    }
+    .status-container > span {
+        margin: 0 10px;
+    }
+    .rx480-base {
+        width: 100%;
+    }
+    .rx480-cooler {
+        transform-origin: center;
+        position: absolute;
+    }
+    @keyframes cooler-rotating {
+        from {
+            transform: rotate(0deg);
+        }
+        to {
+            transform: rotate(360deg);
+        }
+    }
+    .cooler-rotating {
+        animation: cooler-rotating .0s linear infinite;
+    }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RADEON SIMULATOR <span id="game-message"></span></h1>
+        <div style="position: relative;">
+            <img class="rx480-base" src="rx480base.png">
+            <img class="rx480-cooler cooler-rotating" src="rx480cooler.png">
+        </div>
+        <div class="status-container">
+            <span id="current-gpu-load"></span>
+            <span id="current-core-temp"></span>
+            <span id="current-cooler-speed"></span>
+            <span id="current-noise-level"></span>
+            <span id="wasted-time"></span>
+        </div>
+        <div style="text-align:center">
+            <button onclick="boot()">부팅</button>
+            <button onclick="cooling()">쿨링</button>
+            <button onclick="pause()">일시 정지</button>
+        </div>
+        <div style="margin-top:20px;text-align:center">
+            <div>RX480 이미지 출처: <a href="http://highsolutions.mx/preludio-nuestras-pruebas-desempeno-radeon-rx-480-craneo/">링크</a></div>
+            <div>Copyright(C) 2016 RadeonSim. All rights reserved.</div>
+        </div>
+    </div>
+
+    <script>
+    var lastWidth = window.innerWidth
+    var base = document.getElementsByClassName('rx480-base')[0]
+    var cooler = document.getElementsByClassName('rx480-cooler')[0]
+
+    var refresingSec = 500
+    var coolerSpeedAdder = 1.5
+    var coolerKineticEnergyLosing = 2
+    var paused = false
+
+    var power = false
+    var refreshingInterval = null
+    var roomTemp = 22.5
+    var coreBlown = false
+    var coolerBroken = false
+    var coreTemp = roomTemp
+    var gpuLoad = 0
+    var noiseLevel = 0
+    var currentCoolerSpeed = 0
+    var targetCoolerSpeed = 0
+    var wastedTime = 0
+
+    function resizeImages() {
+        cooler.style.width  = 305 * (base.offsetWidth / 1158) + 'px'
+        cooler.style.left = 816 * (base.offsetWidth / 1158) + 'px'
+        cooler.style.top = 65 * (base.offsetWidth / 1158) + 'px'
+        //cooler.style.top = 0
+    }
+
+    function coolerSpeedControl() {
+        if (currentCoolerSpeed <= 0) {
+            cooler.style.animationDuration = '0s'
+            return
+        }
+
+        var value = Math.max((currentCoolerSpeed <= 20) ? (0.5 - (currentCoolerSpeed * 5 / 100) * 0.3) : (0.2 - (currentCoolerSpeed / 100) * 0.1), 0.1)
+
+        cooler.style.animationDuration =  value + 's'
+        console.log((value));
+    }
+
+    function refreshing() {
+        displayStatus()
+
+        if (paused)
+            return
+
+        currentCoolerSpeed -= coolerKineticEnergyLosing
+        coolerSpeedControl()
+
+        if (coreBlown || !power) {
+            coreTemp = Math.max(coreTemp - 2.2, roomTemp)
+            gpuLoad = 0
+            //currentCoolerSpeed = Math.max(currentCoolerSpeed, -1)
+            return
+        }
+
+        wastedTime += refresingSec
+
+        //gpuLoad = Math.min(Math.max(Math.random() * (gpuLoad + 50) + (gpuLoad - 50), 0), 100)
+        gpuLoad = Math.random() * 95 + 5
+        coreTemp = Math.max(coreTemp + (gpuLoad + 0.3 - currentCoolerSpeed) / 10, 32)
+        noiseLevel = Math.max(noiseLevel + Math.min((currentCoolerSpeed - Math.max(gpuLoad / 1.5, 60)) / (coreTemp / 10), 200), 0)
+
+        if (coreTemp >= 120) {
+            blowCore()
+        }
+        if (noiseLevel >= 200) {
+            coolerBroken = true
+        }
+    }
+
+    function pause() {
+        paused = !paused
+    }
+
+    function displayStatus() {
+        document.getElementById('current-gpu-load').innerHTML = 'GPU 로드: ' + gpuLoad.toFixed(1) + '%'
+        document.getElementById('current-core-temp').innerHTML = '코어 온도: ' + coreTemp.toFixed(1) + '℃'
+        document.getElementById('current-cooler-speed').innerHTML = '쿨러 속도: ' + Math.max(Math.floor(currentCoolerSpeed), 0) + "%"
+        document.getElementById('current-noise-level').innerHTML = '분노도: ' + noiseLevel.toFixed(1) + '/' + 200
+        document.getElementById('wasted-time').innerHTML = '작동한 시간: ' + wastedTime * 0.001 + '초'
+
+        document.getElementById('game-message').innerHTML = ''
+
+        if (paused) {
+            document.getElementById('game-message').innerHTML = '- PAUSED'
+            return
+        }
+
+        if (coolerBroken) {
+            document.getElementById('game-message').innerHTML = '- COOLER BROKEN(KICKED COMPUTER)'
+        }
+
+        if (coreBlown) {
+            document.getElementById('game-message').innerHTML = '- CORE BLOWN'
+        }
+    }
+
+    function blowCore() {
+        coreBlown = true
+        //currentCoolerSpeed = -1
+    }
+
+    function boot() {
+        if (coreBlown)
+            return
+
+        if (power) {
+            power = false
+            noiseLevel += 80
+            return
+        }
+
+        power = true
+        currentCoolerSpeed = Math.max(currentCoolerSpeed, 20)
+
+        if (!refreshingInterval) {
+
+            refreshing()
+            refreshingInterval = setInterval(refreshing, refresingSec)
+        }
+    }
+
+    function cooling() {
+        if (coolerBroken || !power) {
+            //currentCoolerSpeed = -1
+            return
+        }
+
+        currentCoolerSpeed = Math.min(Math.max(currentCoolerSpeed + coolerSpeedAdder, 0), 100)
+    }
+
+    window.addEventListener('resize', function (e) {
+        if (lastWidth !== window.innerWidth)
+            resizeImages()
+    })
+
+    document.addEventListener('DOMContentLoaded', function () {
+        resizeImages()
+        displayStatus()
+    })
+
+    //cooler.style.height = 304 * (base.offsetHeight / 561) + 'px'
+
+    //cooler.style.left = 968.5 * (base.offsetWidth / 1158) + 'px'
+    //cooler.style.top = 217 * (base.offsetWidth / 1158) + 'px'
+    </script>
+</body>
+</html>
