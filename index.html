@@ -73,9 +73,9 @@
             <span id="wasted-time"></span>
         </div>
         <div style="text-align:center">
-            <button onclick="boot()">부팅</button>
-            <button onclick="cooling()">쿨링</button>
-            <button onclick="pause()">일시 정지</button>
+            <button id="boot-btn" onclick="boot()">부팅</button>
+            <button id="cooling-btn" onclick="cooling()">쿨링</button>
+            <button id="pause-btn" onclick="pause()">일시 정지</button>
         </div>
         <div style="margin-top:20px;text-align:center">
             <div>RX480 이미지 출처: <a href="http://highsolutions.mx/preludio-nuestras-pruebas-desempeno-radeon-rx-480-craneo/">링크</a></div>
@@ -109,7 +109,6 @@
         cooler.style.width  = 305 * (base.offsetWidth / 1158) + 'px'
         cooler.style.left = 816 * (base.offsetWidth / 1158) + 'px'
         cooler.style.top = 65 * (base.offsetWidth / 1158) + 'px'
-        //cooler.style.top = 0
     }
 
     function coolerSpeedControl() {
@@ -136,13 +135,11 @@
         if (coreBlown || !power) {
             coreTemp = Math.max(coreTemp - 2.2, roomTemp)
             gpuLoad = 0
-            //currentCoolerSpeed = Math.max(currentCoolerSpeed, -1)
             return
         }
 
         wastedTime += refresingSec
 
-        //gpuLoad = Math.min(Math.max(Math.random() * (gpuLoad + 50) + (gpuLoad - 50), 0), 100)
         gpuLoad = Math.random() * 95 + 5
         coreTemp = Math.max(coreTemp + (gpuLoad + 0.3 - currentCoolerSpeed) / 10, 32)
         noiseLevel = Math.max(noiseLevel + Math.min((currentCoolerSpeed - Math.max(gpuLoad / 1.5, 60)) / (coreTemp / 10), 200), 0)
@@ -152,11 +149,14 @@
         }
         if (noiseLevel >= 200) {
             coolerBroken = true
+            document.getElementById('cooling-btn').innerHTML = '쿨러 모터 이상'
         }
     }
 
     function pause() {
         paused = !paused
+
+        document.getElementById('pause-btn').innerHTML = paused ? '계속' : '일시 정지'
     }
 
     function displayStatus() {
@@ -184,7 +184,8 @@
 
     function blowCore() {
         coreBlown = true
-        //currentCoolerSpeed = -1
+
+        document.getElementById('boot-btn').innerHTML = '코어 이상'
     }
 
     function boot() {
@@ -194,14 +195,20 @@
         if (power) {
             power = false
             noiseLevel += 80
+            wastedTime = 0
+            document.getElementById('boot-btn').innerHTML = '부팅'
+
             return
         }
 
         power = true
-        currentCoolerSpeed = Math.max(currentCoolerSpeed, 20)
+
+        if (!coolerBroken)
+            currentCoolerSpeed = Math.max(currentCoolerSpeed, 20)
+
+        document.getElementById('boot-btn').innerHTML = '긴급 셧다운'
 
         if (!refreshingInterval) {
-
             refreshing()
             refreshingInterval = setInterval(refreshing, refresingSec)
         }
@@ -209,7 +216,6 @@
 
     function cooling() {
         if (coolerBroken || !power) {
-            //currentCoolerSpeed = -1
             return
         }
 
@@ -225,11 +231,6 @@
         resizeImages()
         displayStatus()
     })
-
-    //cooler.style.height = 304 * (base.offsetHeight / 561) + 'px'
-
-    //cooler.style.left = 968.5 * (base.offsetWidth / 1158) + 'px'
-    //cooler.style.top = 217 * (base.offsetWidth / 1158) + 'px'
     </script>
 </body>
 </html>
